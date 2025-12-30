@@ -42,13 +42,13 @@ go.work.sum
 *.a
 *.o
 
-# Ignore binaries in any subdirectory
-**/nmap
-**/masscan
-**/subfinder
-**/httpx
-**/nuclei
-**/gobuster
+# Ignore compiled tool binaries in bin directory
+bin/nmap
+bin/masscan
+bin/subfinder
+bin/httpx
+bin/nuclei
+bin/gobuster
 
 # Test binaries
 *.test

@@ -17,8 +17,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_TAGS=""
 VERBOSE=0
 
+# Dependency paths - can be overridden by environment
+SDK_PATH="${SDK_PATH:-}"
+GIBSON_PATH="${GIBSON_PATH:-}"
+
 # Tool directories organized by MITRE ATT&CK phase
-# Extracted from go.work file
 TOOLS=(
     # Reconnaissance Tools (TA0043)
     "reconnaissance/subfinder"
@@ -51,16 +54,35 @@ TOOLS=(
     "privilege-escalation/linpeas"
     "privilege-escalation/winpeas"
     "privilege-escalation/john"
+    "privilege-escalation/hashcat"
 
     # Defense Evasion Tools (TA0005)
     "defense-evasion/msfvenom"
 
     # Credential Access Tools (TA0006)
     "credential-access/secretsdump"
+    "credential-access/responder"
 
     # Discovery Tools (TA0007)
     "discovery/nmap"
     "discovery/bloodhound"
+    "discovery/crackmapexec"
+
+    # Lateral Movement Tools (TA0008)
+    "lateral-movement/proxychains"
+    "lateral-movement/xfreerdp"
+
+    # Collection Tools (TA0009)
+    "collection/tshark"
+
+    # Command and Control Tools (TA0011)
+    "command-and-control/sliver"
+
+    # Exfiltration Tools (TA0010)
+    "exfiltration/rclone"
+
+    # Impact Tools (TA0040)
+    "impact/slowhttptest"
 )
 
 # Usage information
@@ -138,7 +160,68 @@ setup_directories() {
     fi
 }
 
+# Setup Go workspace for building tools
+# This handles both local development (relative paths) and Docker builds (absolute paths)
+setup_workspace() {
+    print_section "Setting up Go workspace"
+
+    # Auto-detect SDK and Gibson paths if not set
+    if [ -z "$SDK_PATH" ]; then
+        # Check common locations
+        if [ -d "/src/sdk" ]; then
+            SDK_PATH="/src/sdk"
+        elif [ -d "$SCRIPT_DIR/../../../sdk" ]; then
+            SDK_PATH="$(cd "$SCRIPT_DIR/../../../sdk" && pwd)"
+        else
+            print_warning "SDK_PATH not set and not found in standard locations"
+            print_info "Set SDK_PATH environment variable or clone SDK to /src/sdk or ../../../sdk"
+            return 1
+        fi
+    fi
+
+    if [ -z "$GIBSON_PATH" ]; then
+        # Check common locations
+        if [ -d "/src/gibson" ]; then
+            GIBSON_PATH="/src/gibson"
+        elif [ -d "$SCRIPT_DIR/../../../gibson" ]; then
+            GIBSON_PATH="$(cd "$SCRIPT_DIR/../../../gibson" && pwd)"
+        else
+            print_warning "GIBSON_PATH not set and not found in standard locations"
+            print_info "Set GIBSON_PATH environment variable or clone Gibson to /src/gibson or ../../../gibson"
+            return 1
+        fi
+    fi
+
+    # Export paths for use in build_tool
+    export SDK_PATH
+    export GIBSON_PATH
+
+    print_info "Using SDK from: $SDK_PATH"
+    print_info "Using Gibson from: $GIBSON_PATH"
+
+    # Update pkg go.mod first (shared dependency)
+    if [ -d "$SCRIPT_DIR/pkg" ] && [ -f "$SCRIPT_DIR/pkg/go.mod" ]; then
+        print_info "Setting up pkg module..."
+        local pkgmod="$SCRIPT_DIR/pkg/go.mod"
+
+        # Remove old replace directives
+        sed -i '/github.com\/zero-day-ai\/sdk.*=>/d' "$pkgmod"
+        sed -i '/github.com\/zero-day-ai\/gibson[[:space:]]*=>/d' "$pkgmod"
+
+        # Add new replace directives
+        echo "" >> "$pkgmod"
+        echo "replace github.com/zero-day-ai/sdk => $SDK_PATH" >> "$pkgmod"
+        echo "replace github.com/zero-day-ai/gibson => $GIBSON_PATH" >> "$pkgmod"
+
+        (cd "$SCRIPT_DIR/pkg" && GOWORK=off go mod tidy 2>/dev/null) || true
+    fi
+
+    print_success "Go workspace configured"
+    return 0
+}
+
 # Build a single tool
+# Returns: 0 = success, 1 = failed, 2 = skipped
 build_tool() {
     local tool_path=$1
     local tool_name=$(basename "$tool_path")
@@ -146,18 +229,44 @@ build_tool() {
 
     if [ ! -d "$tool_path" ]; then
         print_warning "Tool directory $tool_path does not exist, skipping"
-        return 0
+        return 2
     fi
 
     if [ ! -f "$tool_path/main.go" ]; then
         print_warning "No main.go found in $tool_path, skipping"
-        return 0
+        return 2
     fi
 
     print_info "Building $tool_name..."
 
-    # Build command
-    local build_cmd="go build -o ../../$output_binary"
+    # Update go.mod in this tool directory with correct paths
+    if [ -f "$tool_path/go.mod" ]; then
+        local modfile="$tool_path/go.mod"
+        local pkg_rel=$(realpath --relative-to="$tool_path" "$SCRIPT_DIR/pkg" 2>/dev/null || echo "../../pkg")
+
+        # Remove old replace directives
+        sed -i '/github.com\/zero-day-ai\/sdk.*=>/d' "$modfile"
+        sed -i '/github.com\/zero-day-ai\/gibson[[:space:]]*=>/d' "$modfile"
+        sed -i '/github.com\/zero-day-ai\/gibson-tools-official\/pkg.*=>/d' "$modfile"
+        sed -i '/^replace ($/{N;/^replace (\n)$/d}' "$modfile"
+
+        # Add new replace directives
+        echo "" >> "$modfile"
+        echo "replace github.com/zero-day-ai/sdk => $SDK_PATH" >> "$modfile"
+        echo "replace github.com/zero-day-ai/gibson => $GIBSON_PATH" >> "$modfile"
+        if [ -d "$SCRIPT_DIR/pkg" ]; then
+            echo "replace github.com/zero-day-ai/gibson-tools-official/pkg => $pkg_rel" >> "$modfile"
+        fi
+
+        # Run go mod tidy to update go.sum
+        if [ "$VERBOSE" -eq 1 ]; then
+            print_info "Running go mod tidy for $tool_name..."
+        fi
+        (cd "$tool_path" && GOWORK=off go mod tidy 2>/dev/null) || true
+    fi
+
+    # Build command - disable go.work to avoid conflicts
+    local build_cmd="GOWORK=off go build -o ../../$output_binary"
 
     if [ -n "$BUILD_TAGS" ]; then
         build_cmd="$build_cmd -tags=$BUILD_TAGS"
@@ -188,6 +297,12 @@ build_tool() {
 build_all() {
     print_section "Building all Gibson Tools"
 
+    # Setup workspace first (configure SDK/Gibson paths)
+    if ! setup_workspace; then
+        print_error "Failed to setup Go workspace. Ensure SDK and Gibson are available."
+        return 1
+    fi
+
     setup_directories
 
     local success_count=0
@@ -196,15 +311,20 @@ build_all() {
     local total=${#TOOLS[@]}
 
     for tool in "${TOOLS[@]}"; do
-        if build_tool "$tool"; then
-            ((success_count++))
-        else
-            if [ ! -d "$tool" ] || [ ! -f "$tool/main.go" ]; then
-                ((skip_count++))
-            else
-                ((fail_count++))
-            fi
-        fi
+        # Capture return code (0=success, 1=failed, 2=skipped)
+        local result=0
+        build_tool "$tool" || result=$?
+        case $result in
+            0)
+                ((++success_count)) || true
+                ;;
+            1)
+                ((++fail_count)) || true
+                ;;
+            2)
+                ((++skip_count)) || true
+                ;;
+        esac
     done
 
     print_section "Build Summary"
