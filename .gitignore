@@ -30,3 +30,35 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+# Binaries - NO BINARIES ALLOWED IN REPO (Security Policy)
+# All binaries must be built from source locally
+**/bin/
+*.exe
+*.dll
+*.so
+*.dylib
+*.out
+*.app
+*.a
+*.o
+
+# Ignore binaries in any subdirectory
+**/nmap
+**/masscan
+**/subfinder
+**/httpx
+**/nuclei
+**/gobuster
+
+# Test binaries
+*.test
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
