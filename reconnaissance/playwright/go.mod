@@ -4,7 +4,7 @@ go 1.24.4
 
 require (
 	github.com/playwright-community/playwright-go v0.4702.0
-	github.com/zero-day-ai/sdk v0.3.0
+	github.com/zero-day-ai/sdk v0.8.0
 )
 
 require (
@@ -33,5 +33,3 @@ require (
 	google.golang.org/grpc v1.78.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
-
-
