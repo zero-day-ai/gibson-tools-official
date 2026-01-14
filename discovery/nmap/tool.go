@@ -107,6 +107,16 @@ func (t *ToolImpl) Health(ctx context.Context) types.HealthStatus {
 
 // buildArgs constructs the command-line arguments for nmap
 func buildArgs(target, ports, scanType string, serviceDetection, osDetection bool, scripts []string, timing int) []string {
+	// Ping scan mode (-sn) is host discovery only, no ports
+	if scanType == "ping" {
+		args := []string{"-oX", "-", "-sn"}
+		if timing >= 0 && timing <= 5 {
+			args = append(args, fmt.Sprintf("-T%d", timing))
+		}
+		args = append(args, target)
+		return args
+	}
+
 	args := []string{"-oX", "-", "-p", ports}
 
 	// Scan type

@@ -13,8 +13,8 @@ func InputSchema() schema.JSON {
 		},
 		"scan_type": schema.JSON{
 			Type:        "string",
-			Description: "Scan type: connect (default, no root), syn (requires root), udp, ack, window, maimon",
-			Enum:        []any{"connect", "syn", "udp", "ack", "window", "maimon"},
+			Description: "Scan type: connect (default, no root), syn (requires root), udp, ack, window, maimon, ping (host discovery only, no port scan)",
+			Enum:        []any{"connect", "syn", "udp", "ack", "window", "maimon", "ping"},
 			Default:     "connect",
 		},
 		"service_detection": schema.JSON{
