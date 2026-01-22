@@ -3,7 +3,7 @@ module github.com/zero-day-ai/gibson-tools-official/fingerprinting/testssl
 go 1.24.4
 
 require (
-	github.com/zero-day-ai/sdk v0.34.0
+	github.com/zero-day-ai/sdk v0.35.0
 	google.golang.org/protobuf v1.36.11
 )
 
