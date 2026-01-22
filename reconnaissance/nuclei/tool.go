@@ -56,11 +56,11 @@ func (t *toolWithHealth) Health(ctx context.Context) types.HealthStatus {
 }
 
 func (t *toolWithHealth) InputMessageType() string {
-	return "tools.v1.NucleiRequest"
+	return "gibson.tools.NucleiRequest"
 }
 
 func (t *toolWithHealth) OutputMessageType() string {
-	return "tools.v1.NucleiResponse"
+	return "gibson.tools.NucleiResponse"
 }
 
 func (t *toolWithHealth) ExecuteProto(ctx context.Context, input proto.Message) (proto.Message, error) {

@@ -52,11 +52,11 @@ type protoTool struct {
 }
 
 func (t *protoTool) InputMessageType() string {
-	return "tools.v1.HttpxRequest"
+	return "gibson.tools.HttpxRequest"
 }
 
 func (t *protoTool) OutputMessageType() string {
-	return "tools.v1.HttpxResponse"
+	return "gibson.tools.HttpxResponse"
 }
 
 func (t *protoTool) ExecuteProto(ctx context.Context, input proto.Message) (proto.Message, error) {

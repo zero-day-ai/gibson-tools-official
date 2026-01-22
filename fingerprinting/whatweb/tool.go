@@ -61,12 +61,12 @@ func (t *toolWithHealth) Health(ctx context.Context) types.HealthStatus {
 
 // InputMessageType returns the proto message type for input
 func (t *ToolImpl) InputMessageType() string {
-	return "tools.v1.WhatwebRequest"
+	return "gibson.tools.WhatwebRequest"
 }
 
 // OutputMessageType returns the proto message type for output
 func (t *ToolImpl) OutputMessageType() string {
-	return "tools.v1.WhatwebResponse"
+	return "gibson.tools.WhatwebResponse"
 }
 
 // ExecuteProto runs the whatweb tool with proto message input
