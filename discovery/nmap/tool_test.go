@@ -142,20 +142,20 @@ func TestParseOutput(t *testing.T) {
 		}
 
 		host := result.Hosts[0]
-		if host.IP != "192.168.1.1" {
-			t.Errorf("expected ip=192.168.1.1, got %v", host.IP)
+		if host.Ip != "192.168.1.1" {
+			t.Errorf("expected ip=192.168.1.1, got %v", host.Ip)
 		}
 
-		if host.Hostname != "test.local" {
+		if host.Hostname == nil || *host.Hostname != "test.local" {
 			t.Errorf("expected hostname=test.local, got %v", host.Hostname)
 		}
 
-		if host.State != "up" {
+		if host.State == nil || *host.State != "up" {
 			t.Errorf("expected state=up, got %v", host.State)
 		}
 
-		if host.OS != "Linux 5.4" {
-			t.Errorf("expected os='Linux 5.4', got %v", host.OS)
+		if host.Os == nil || *host.Os != "Linux 5.4" {
+			t.Errorf("expected os='Linux 5.4', got %v", host.Os)
 		}
 
 		// Validate port
@@ -164,8 +164,8 @@ func TestParseOutput(t *testing.T) {
 		}
 
 		port := result.Ports[0]
-		if port.HostID != "192.168.1.1" {
-			t.Errorf("expected hostID=192.168.1.1, got %v", port.HostID)
+		if port.HostId != "192.168.1.1" {
+			t.Errorf("expected hostID=192.168.1.1, got %v", port.HostId)
 		}
 
 		if port.Number != 80 {
@@ -176,7 +176,7 @@ func TestParseOutput(t *testing.T) {
 			t.Errorf("expected protocol=tcp, got %v", port.Protocol)
 		}
 
-		if port.State != "open" {
+		if port.State == nil || *port.State != "open" {
 			t.Errorf("expected state=open, got %v", port.State)
 		}
 
@@ -186,15 +186,15 @@ func TestParseOutput(t *testing.T) {
 		}
 
 		service := result.Services[0]
-		if service.PortID != "192.168.1.1:80:tcp" {
-			t.Errorf("expected portID=192.168.1.1:80:tcp, got %v", service.PortID)
+		if service.PortId != "192.168.1.1:80:tcp" {
+			t.Errorf("expected portID=192.168.1.1:80:tcp, got %v", service.PortId)
 		}
 
 		if service.Name != "http" {
 			t.Errorf("expected service name=http, got %v", service.Name)
 		}
 
-		if service.Version != "nginx 1.20.0" {
+		if service.Version == nil || *service.Version != "nginx 1.20.0" {
 			t.Errorf("expected version='nginx 1.20.0', got %v", service.Version)
 		}
 	})
@@ -267,8 +267,8 @@ func TestParseOutput(t *testing.T) {
 			t.Errorf("expected first service name=ssh, got %v", sshService.Name)
 		}
 
-		if sshService.PortID != "192.168.1.1:22:tcp" {
-			t.Errorf("expected SSH portID=192.168.1.1:22:tcp, got %v", sshService.PortID)
+		if sshService.PortId != "192.168.1.1:22:tcp" {
+			t.Errorf("expected SSH portID=192.168.1.1:22:tcp, got %v", sshService.PortId)
 		}
 
 		// Check second service (HTTP)
@@ -277,8 +277,8 @@ func TestParseOutput(t *testing.T) {
 			t.Errorf("expected second service name=http, got %v", httpService.Name)
 		}
 
-		if httpService.PortID != "192.168.1.1:80:tcp" {
-			t.Errorf("expected HTTP portID=192.168.1.1:80:tcp, got %v", httpService.PortID)
+		if httpService.PortId != "192.168.1.1:80:tcp" {
+			t.Errorf("expected HTTP portID=192.168.1.1:80:tcp, got %v", httpService.PortId)
 		}
 	})
 }
