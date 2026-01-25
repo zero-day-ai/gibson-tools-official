@@ -1,4 +1,4 @@
-module github.com/zero-day-ai/gibson-tools-official/reconnaissance/nuclei
+module github.com/zero-day-ai/tools/reconnaissance/nuclei
 
 go 1.24.4
 

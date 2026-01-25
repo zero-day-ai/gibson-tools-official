@@ -1,4 +1,4 @@
-module github.com/zero-day-ai/gibson-tools-official/fingerprinting/whatweb
+module github.com/zero-day-ai/tools/fingerprinting/whatweb
 
 go 1.24.4
 

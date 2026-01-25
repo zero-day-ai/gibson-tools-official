@@ -1,4 +1,4 @@
-module github.com/zero-day-ai/gibson-tools-official/reconnaissance/httpx
+module github.com/zero-day-ai/tools/reconnaissance/httpx
 
 go 1.24.4
 

@@ -1,4 +1,4 @@
-module github.com/zero-day-ai/gibson-tools-official/fingerprinting/wappalyzer
+module github.com/zero-day-ai/tools/fingerprinting/wappalyzer
 
 go 1.24.4
 

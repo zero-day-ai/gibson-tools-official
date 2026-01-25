@@ -1,4 +1,4 @@
-module github.com/zero-day-ai/gibson-tools-official/fingerprinting/testssl
+module github.com/zero-day-ai/tools/fingerprinting/testssl
 
 go 1.24.4
 

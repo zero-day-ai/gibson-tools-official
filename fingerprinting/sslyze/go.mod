@@ -1,4 +1,4 @@
-module github.com/zero-day-ai/gibson-tools-official/fingerprinting/sslyze
+module github.com/zero-day-ai/tools/fingerprinting/sslyze
 
 go 1.24.4
 

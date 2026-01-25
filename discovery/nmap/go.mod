@@ -1,4 +1,4 @@
-module github.com/zero-day-ai/gibson-tools-official/discovery/nmap
+module github.com/zero-day-ai/tools/discovery/nmap
 
 go 1.24.4
 
