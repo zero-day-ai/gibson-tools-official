@@ -2,10 +2,8 @@ module github.com/zero-day-ai/gibson-tools-official/reconnaissance/nuclei
 
 go 1.24.4
 
-replace github.com/zero-day-ai/sdk => ../../../sdk
-
 require (
-	github.com/zero-day-ai/sdk v0.36.2
+	github.com/zero-day-ai/sdk v0.37.0
 	google.golang.org/protobuf v1.36.11
 )
 
