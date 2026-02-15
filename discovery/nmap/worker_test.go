@@ -1,6 +1,6 @@
 //go:build integration
 
-package main
+package nmap
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/zero-day-ai/sdk/api/gen/toolspb"
+	"github.com/zero-day-ai/tools/discovery/nmap/gen"
 	"github.com/zero-day-ai/sdk/queue"
 	"github.com/zero-day-ai/sdk/tool/worker"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -57,7 +57,7 @@ func TestWorkerIntegration(t *testing.T) {
 		jobID := "test-job-worker-1"
 
 		// Create work item with ping scan (fastest and requires no special privileges)
-		req := &toolspb.NmapRequest{
+		req := &gen.NmapRequest{
 			Targets: []string{"127.0.0.1"},
 			Args:    []string{"-sn"}, // Ping scan only
 		}
@@ -139,7 +139,7 @@ func TestWorkerIntegration(t *testing.T) {
 		assert.NotEmpty(t, result.OutputJSON, "output JSON should not be empty")
 
 		// Parse output JSON to verify structure
-		var nmapResp toolspb.NmapResponse
+		var nmapResp gen.NmapResponse
 		err = protojson.Unmarshal([]byte(result.OutputJSON), &nmapResp)
 		require.NoError(t, err, "should unmarshal output JSON")
 		assert.Greater(t, nmapResp.TotalHosts, int32(0), "should find at least one host")
@@ -170,7 +170,7 @@ func TestWorkerIntegration(t *testing.T) {
 
 		// Push multiple work items
 		for i := 0; i < numItems; i++ {
-			req := &toolspb.NmapRequest{
+			req := &gen.NmapRequest{
 				Targets: []string{"127.0.0.1"},
 				Args:    []string{"-sn"},
 			}
@@ -261,7 +261,7 @@ func TestWorkerIntegration(t *testing.T) {
 		jobID := "test-job-error"
 
 		// Create invalid request (missing required args)
-		req := &toolspb.NmapRequest{
+		req := &gen.NmapRequest{
 			Targets: []string{"127.0.0.1"},
 			Args:    []string{}, // Empty args - should fail validation
 		}
@@ -375,7 +375,7 @@ func TestWorkerWithoutNmap(t *testing.T) {
 	queueName := fmt.Sprintf("tool:%s:queue", tool.Name())
 	jobID := "test-job-no-binary"
 
-	req := &toolspb.NmapRequest{
+	req := &gen.NmapRequest{
 		Targets: []string{"127.0.0.1"},
 		Args:    []string{"-sn"},
 	}
@@ -443,7 +443,7 @@ func processWorkItemWrapper(ctx context.Context, tool *ToolImpl, item queue.Work
 	}
 
 	// Unmarshal input
-	var req toolspb.NmapRequest
+	var req gen.NmapRequest
 	if err := protojson.Unmarshal([]byte(item.InputJSON), &req); err != nil {
 		result.Error = fmt.Sprintf("failed to unmarshal input: %v", err)
 		result.CompletedAt = time.Now().UnixMilli()

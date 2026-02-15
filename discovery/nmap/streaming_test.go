@@ -1,4 +1,4 @@
-package main
+package nmap
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/zero-day-ai/sdk/api/gen/toolspb"
+	"github.com/zero-day-ai/tools/discovery/nmap/gen"
 	"github.com/zero-day-ai/sdk/tool"
 	"google.golang.org/protobuf/proto"
 )
@@ -156,7 +156,7 @@ func TestNmapStreamingExecution(t *testing.T) {
 	stream := newMockToolStream("test-exec-streaming")
 
 	// Create request with fast scan of localhost
-	req := &toolspb.NmapRequest{
+	req := &gen.NmapRequest{
 		Targets: []string{"127.0.0.1"},
 		Args:    []string{"-p", "80,443", "-T4", "--host-timeout", "5s"},
 	}
@@ -197,7 +197,7 @@ func TestNmapStreamingExecution(t *testing.T) {
 	result := stream.getCompleteResult()
 	require.NotNil(t, result, "should have complete result")
 
-	nmapResp, ok := result.(*toolspb.NmapResponse)
+	nmapResp, ok := result.(*gen.NmapResponse)
 	require.True(t, ok, "result should be NmapResponse")
 	assert.NotNil(t, nmapResp.Hosts, "should have hosts in response")
 	t.Logf("Scan returned %d hosts", len(nmapResp.Hosts))
@@ -228,7 +228,7 @@ func TestNmapStreamingCancellation(t *testing.T) {
 
 	// Create request with a slower scan to allow time for cancellation
 	// Using a larger port range to make the scan take longer
-	req := &toolspb.NmapRequest{
+	req := &gen.NmapRequest{
 		Targets: []string{"127.0.0.1"},
 		Args:    []string{"-p", "1-1000", "-T2", "--max-retries", "2"},
 	}
@@ -281,7 +281,7 @@ func TestNmapStreamingCancellation(t *testing.T) {
 
 	if result != nil {
 		t.Log("Got complete result (partial results)")
-		nmapResp, ok := result.(*toolspb.NmapResponse)
+		nmapResp, ok := result.(*gen.NmapResponse)
 		require.True(t, ok, "result should be NmapResponse")
 		t.Logf("Partial scan returned %d hosts", len(nmapResp.Hosts))
 	} else if errorEvent != nil {
@@ -313,7 +313,7 @@ func TestNmapStreamingInvalidInput(t *testing.T) {
 	// Test with no targets
 	t.Run("no_targets", func(t *testing.T) {
 		stream := newMockToolStream("test-no-targets")
-		req := &toolspb.NmapRequest{
+		req := &gen.NmapRequest{
 			Targets: []string{},
 			Args:    []string{"-sn"},
 		}
@@ -331,7 +331,7 @@ func TestNmapStreamingInvalidInput(t *testing.T) {
 	// Test with no args
 	t.Run("no_args", func(t *testing.T) {
 		stream := newMockToolStream("test-no-args")
-		req := &toolspb.NmapRequest{
+		req := &gen.NmapRequest{
 			Targets: []string{"127.0.0.1"},
 			Args:    []string{},
 		}
@@ -359,7 +359,7 @@ func TestNmapStreamingTimeout(t *testing.T) {
 	stream := newMockToolStream("test-exec-timeout")
 
 	// Create request with a scan that should take longer than timeout
-	req := &toolspb.NmapRequest{
+	req := &gen.NmapRequest{
 		Targets: []string{"127.0.0.1"},
 		Args:    []string{"-p", "1-65535", "-T1"}, // Very slow scan
 	}
@@ -416,7 +416,7 @@ func TestNmapStreamingMultipleTargets(t *testing.T) {
 	stream := newMockToolStream("test-exec-multi")
 
 	// Scan multiple localhost addresses (same host, but tests multiple targets)
-	req := &toolspb.NmapRequest{
+	req := &gen.NmapRequest{
 		Targets: []string{"127.0.0.1", "localhost"},
 		Args:    []string{"-p", "80", "-T4", "--host-timeout", "3s"},
 	}
@@ -432,7 +432,7 @@ func TestNmapStreamingMultipleTargets(t *testing.T) {
 	result := stream.getCompleteResult()
 	require.NotNil(t, result, "should have complete result")
 
-	nmapResp, ok := result.(*toolspb.NmapResponse)
+	nmapResp, ok := result.(*gen.NmapResponse)
 	require.True(t, ok, "result should be NmapResponse")
 	t.Logf("Scan returned %d hosts", len(nmapResp.Hosts))
 
@@ -487,7 +487,7 @@ func TestNmapStreamingExecutionID(t *testing.T) {
 	executionID := "unique-exec-id-12345"
 	stream := newMockToolStream(executionID)
 
-	req := &toolspb.NmapRequest{
+	req := &gen.NmapRequest{
 		Targets: []string{"127.0.0.1"},
 		Args:    []string{"-p", "80", "-T4"},
 	}

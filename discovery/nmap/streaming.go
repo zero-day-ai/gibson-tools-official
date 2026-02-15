@@ -1,4 +1,4 @@
-package main
+package nmap
 
 import (
 	"bufio"
@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zero-day-ai/sdk/api/gen/toolspb"
 	"github.com/zero-day-ai/sdk/tool"
+	"github.com/zero-day-ai/tools/discovery/nmap/gen"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -31,9 +31,9 @@ func (t *ToolImpl) StreamExecuteProto(ctx context.Context, input proto.Message, 
 	startTime := time.Now()
 
 	// Type assert and validate input (same as ExecuteProto)
-	req, ok := input.(*toolspb.NmapRequest)
+	req, ok := input.(*gen.NmapRequest)
 	if !ok {
-		return stream.Error(fmt.Errorf("invalid input type: expected *toolspb.NmapRequest, got %T", input), true)
+		return stream.Error(fmt.Errorf("invalid input type: expected *gen.NmapRequest, got %T", input), true)
 	}
 
 	// Validate required fields

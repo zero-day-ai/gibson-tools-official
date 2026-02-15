@@ -44,10 +44,13 @@ BINARIES := $(foreach tool,$(ALL_TOOLS),$(BIN_DIR)/$(notdir $(tool)))
 # Default target
 .DEFAULT_GOAL := all
 
+# Find all tools with proto directories
+TOOLS_WITH_PROTO := $(shell find . -name "proto" -type d -path "*/*/proto" 2>/dev/null | xargs -I {} dirname {} 2>/dev/null)
+
 # Phony targets
 .PHONY: all bin build test integration-test clean help \
 	build-recon build-discovery build-fingerprinting \
-	verify deps tidy fmt vet lint
+	verify deps tidy fmt vet lint proto proto-clean
 
 # Help target - display available targets
 help:
@@ -69,6 +72,8 @@ help:
 	@echo "  fmt              - Format all Go code"
 	@echo "  vet              - Run go vet on all packages"
 	@echo "  lint             - Run golangci-lint (if available)"
+	@echo "  proto            - Generate protos for all tools with proto/ directories"
+	@echo "  proto-clean      - Clean all generated proto code"
 	@echo ""
 	@echo "Phase-specific build targets:"
 	@echo "  build-recon        - Build reconnaissance tools (httpx, nuclei)"
@@ -81,6 +86,7 @@ help:
 	@echo "  make test         # Run unit tests"
 	@echo "  make clean        # Clean build artifacts"
 	@echo "  make build-recon  # Build only reconnaissance tools"
+	@echo "  make proto        # Generate all proto code"
 
 # All target - build and test
 all: build test
@@ -215,3 +221,24 @@ stats: build
 	@echo ""
 	@echo "Binaries:"
 	@ls -lh $(BIN_DIR) | tail -n +2
+
+# Generate protos for all tools
+proto:
+	@echo "Generating protos for all tools..."
+	@for tool in $(TOOLS_WITH_PROTO); do \
+		if [ -f "$$tool/Makefile" ]; then \
+			echo "  -> $$tool"; \
+			$(MAKE) -C $$tool proto || exit 1; \
+		fi; \
+	done
+	@echo "Proto generation complete."
+
+# Clean all generated protos
+proto-clean:
+	@echo "Cleaning generated protos..."
+	@for tool in $(TOOLS_WITH_PROTO); do \
+		if [ -f "$$tool/Makefile" ]; then \
+			$(MAKE) -C $$tool proto-clean 2>/dev/null || true; \
+		fi; \
+	done
+	@echo "Proto cleanup complete."

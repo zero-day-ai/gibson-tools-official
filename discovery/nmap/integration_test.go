@@ -1,6 +1,6 @@
 //go:build integration
 
-package main
+package nmap
 
 import (
 	"context"
@@ -10,8 +10,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/zero-day-ai/sdk/api/gen/toolspb"
 	"github.com/zero-day-ai/sdk/types"
+	"github.com/zero-day-ai/tools/discovery/nmap/gen"
 )
 
 func TestNmapIntegration(t *testing.T) {
@@ -50,7 +50,7 @@ func TestNmapIntegration(t *testing.T) {
 		require.NoError(t, err, "ping scan should not error")
 		require.NotNil(t, resp, "response should not be nil")
 
-		nmapResp, ok := resp.(*toolspb.NmapResponse)
+		nmapResp, ok := resp.(*gen.NmapResponse)
 		require.True(t, ok, "response should be NmapResponse")
 
 		// Verify: Response contains at least one host, host is up
@@ -86,7 +86,7 @@ func TestNmapIntegration(t *testing.T) {
 		require.NoError(t, err, "port scan should not error")
 		require.NotNil(t, resp, "response should not be nil")
 
-		nmapResp, ok := resp.(*toolspb.NmapResponse)
+		nmapResp, ok := resp.(*gen.NmapResponse)
 		require.True(t, ok, "response should be NmapResponse")
 
 		// Verify: Response contains port scan results, output parsing works
@@ -94,7 +94,7 @@ func TestNmapIntegration(t *testing.T) {
 		assert.NotEmpty(t, nmapResp.Hosts, "hosts list should not be empty")
 
 		// Find localhost and verify port information
-		var localhostHost *toolspb.NmapHost
+		var localhostHost *gen.NmapHost
 		for _, host := range nmapResp.Hosts {
 			if host.Ip == "127.0.0.1" {
 				localhostHost = host
@@ -131,14 +131,14 @@ func TestNmapIntegration(t *testing.T) {
 		require.NoError(t, err, "service version scan should not error")
 		require.NotNil(t, resp, "response should not be nil")
 
-		nmapResp, ok := resp.(*toolspb.NmapResponse)
+		nmapResp, ok := resp.(*gen.NmapResponse)
 		require.True(t, ok, "response should be NmapResponse")
 
 		// Verify: Args are passed correctly to nmap
 		assert.Greater(t, nmapResp.TotalHosts, int32(0), "should find at least one host")
 
 		// Find localhost
-		var localhostHost *toolspb.NmapHost
+		var localhostHost *gen.NmapHost
 		for _, host := range nmapResp.Hosts {
 			if host.Ip == "127.0.0.1" {
 				localhostHost = host
@@ -180,7 +180,7 @@ func TestNmapIntegration(t *testing.T) {
 		require.NoError(t, err, "multi-target scan should not error")
 		require.NotNil(t, resp, "response should not be nil")
 
-		nmapResp, ok := resp.(*toolspb.NmapResponse)
+		nmapResp, ok := resp.(*gen.NmapResponse)
 		require.True(t, ok, "response should be NmapResponse")
 
 		// Should find at least one host (both targets resolve to localhost)

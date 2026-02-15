@@ -5,7 +5,7 @@ go 1.24.4
 require (
 	github.com/alicebob/miniredis/v2 v2.36.1
 	github.com/stretchr/testify v1.11.1
-	github.com/zero-day-ai/sdk v0.39.0
+	github.com/zero-day-ai/sdk v0.40.1
 	google.golang.org/protobuf v1.36.11
 )
 

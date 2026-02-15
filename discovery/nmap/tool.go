@@ -1,4 +1,4 @@
-package main
+package nmap
 
 import (
 	"context"
@@ -8,12 +8,12 @@ import (
 	"time"
 
 	"github.com/zero-day-ai/sdk/api/gen/graphragpb"
-	"github.com/zero-day-ai/sdk/api/gen/toolspb"
 	"github.com/zero-day-ai/sdk/exec"
 	"github.com/zero-day-ai/sdk/health"
 	"github.com/zero-day-ai/sdk/tool"
 	"github.com/zero-day-ai/sdk/toolerr"
 	"github.com/zero-day-ai/sdk/types"
+	"github.com/zero-day-ai/tools/discovery/nmap/gen"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -95,12 +95,12 @@ func (t *ToolImpl) Tags() []string {
 
 // InputMessageType returns the proto message type for input
 func (t *ToolImpl) InputMessageType() string {
-	return "gibson.tools.NmapRequest"
+	return "gibson.tools.nmap.NmapRequest"
 }
 
 // OutputMessageType returns the proto message type for output
 func (t *ToolImpl) OutputMessageType() string {
-	return "gibson.tools.NmapResponse"
+	return "gibson.tools.nmap.NmapResponse"
 }
 
 // ExecuteProto runs the nmap tool with proto message input
@@ -108,9 +108,9 @@ func (t *ToolImpl) ExecuteProto(ctx context.Context, input proto.Message) (proto
 	startTime := time.Now()
 
 	// Type assert input to NmapRequest
-	req, ok := input.(*toolspb.NmapRequest)
+	req, ok := input.(*gen.NmapRequest)
 	if !ok {
-		return nil, fmt.Errorf("invalid input type: expected *toolspb.NmapRequest, got %T", input)
+		return nil, fmt.Errorf("invalid input type: expected *gen.NmapRequest, got %T", input)
 	}
 
 	// Validate required fields
@@ -351,12 +351,12 @@ func ptrStr(s string) *string {
 }
 
 // convertToProtoResponse converts DiscoveryResult to NmapResponse
-func convertToProtoResponse(discoveryResult *graphragpb.DiscoveryResult, scanDuration float64, startTime time.Time) *toolspb.NmapResponse {
+func convertToProtoResponse(discoveryResult *graphragpb.DiscoveryResult, scanDuration float64, startTime time.Time) *gen.NmapResponse {
 	hosts := discoveryResult.Hosts
 	ports := discoveryResult.Ports
 	services := discoveryResult.Services
 
-	response := &toolspb.NmapResponse{
+	response := &gen.NmapResponse{
 		TotalHosts:   int32(len(hosts)),
 		ScanDuration: scanDuration,
 		StartTime:    startTime.Unix(),
@@ -392,7 +392,7 @@ func convertToProtoResponse(discoveryResult *graphragpb.DiscoveryResult, scanDur
 			os = *graphragHost.Os
 		}
 
-		nmapHost := &toolspb.NmapHost{
+		nmapHost := &gen.NmapHost{
 			Ip:       graphragHost.Ip,
 			Hostname: hostname,
 			State:    state,
@@ -400,7 +400,7 @@ func convertToProtoResponse(discoveryResult *graphragpb.DiscoveryResult, scanDur
 
 		// Add OS information if available
 		if os != "" {
-			nmapHost.OsMatches = []*toolspb.OSMatch{
+			nmapHost.OsMatches = []*gen.OSMatch{
 				{
 					Name:     os,
 					Accuracy: 100, // Assuming high accuracy for simplicity
@@ -415,7 +415,7 @@ func convertToProtoResponse(discoveryResult *graphragpb.DiscoveryResult, scanDur
 				if graphragPort.State != nil {
 					portState = *graphragPort.State
 				}
-				nmapPort := &toolspb.NmapPort{
+				nmapPort := &gen.NmapPort{
 					Number:   graphragPort.Number,
 					Protocol: graphragPort.Protocol,
 					State:    portState,
@@ -429,7 +429,7 @@ func convertToProtoResponse(discoveryResult *graphragpb.DiscoveryResult, scanDur
 						if graphragService.Version != nil {
 							version = *graphragService.Version
 						}
-						nmapPort.Service = &toolspb.NmapService{
+						nmapPort.Service = &gen.NmapService{
 							Name:    graphragService.Name,
 							Version: version,
 						}

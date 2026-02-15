@@ -1,0 +1,188 @@
+syntax = "proto3";
+package gibson.tools.nmap;
+option go_package = "github.com/zero-day-ai/tools/discovery/nmap/gen";
+
+import "graphrag.proto";
+
+// NmapRequest represents input for the nmap tool
+message NmapRequest {
+    // Targets is the list of hosts or networks to scan (required)
+    repeated string targets = 1;
+
+    // Args contains raw nmap arguments (e.g., "-sV", "-O", "-p 1-1000", "-T4")
+    repeated string args = 2;
+}
+
+// NmapResponse represents output from the nmap tool
+message NmapResponse {
+    // Hosts contains the scan results for each host
+    repeated NmapHost hosts = 1;
+
+    // TotalHosts is the total number of hosts scanned
+    int32 total_hosts = 2;
+
+    // HostsUp is the number of hosts that responded
+    int32 hosts_up = 3;
+
+    // HostsDown is the number of hosts that didn't respond
+    int32 hosts_down = 4;
+
+    // ScanDuration is the scan duration in seconds
+    double scan_duration = 5;
+
+    // NmapVersion is the version of nmap used
+    string nmap_version = 6;
+
+    // Args contains the command-line arguments used
+    string args = 7;
+
+    // StartTime is the scan start timestamp
+    int64 start_time = 8;
+
+    // EndTime is the scan end timestamp
+    int64 end_time = 9;
+
+    // Discovery result for automatic graph storage
+    gibson.graphrag.DiscoveryResult discovery = 100;
+}
+
+// NmapHost represents a single scanned host
+message NmapHost {
+    // IP is the host IP address
+    string ip = 1;
+
+    // Hostname is the resolved hostname (if available)
+    string hostname = 2;
+
+    // State is the host state (up, down, unknown)
+    string state = 3;
+
+    // StateReason is the reason for the host state
+    string state_reason = 4;
+
+    // Ports contains the scanned ports
+    repeated NmapPort ports = 5;
+
+    // OS contains OS detection results
+    repeated OSMatch os_matches = 6;
+
+    // Uptime is the host uptime in seconds (if detected)
+    int64 uptime = 7;
+
+    // LastBoot is the estimated last boot time (if detected)
+    string last_boot = 8;
+
+    // Distance is the network distance (hops) to the host
+    int32 distance = 9;
+
+    // Scripts contains NSE script output
+    map<string, string> scripts = 10;
+
+    // Hostnames contains all discovered hostnames
+    repeated string hostnames = 11;
+}
+
+// NmapPort represents a single scanned port
+message NmapPort {
+    // Number is the port number
+    int32 number = 1;
+
+    // Protocol is the protocol (tcp, udp, sctp)
+    string protocol = 2;
+
+    // State is the port state (open, closed, filtered, unfiltered, open|filtered, closed|filtered)
+    string state = 3;
+
+    // StateReason is the reason for the port state
+    string state_reason = 4;
+
+    // Service contains service detection information
+    NmapService service = 5;
+
+    // Scripts contains NSE script output for this port
+    map<string, string> scripts = 6;
+}
+
+// NmapService represents service information for a port
+message NmapService {
+    // Name is the service name (http, ssh, mysql, etc.)
+    string name = 1;
+
+    // Product is the service product/software name
+    string product = 2;
+
+    // Version is the service version
+    string version = 3;
+
+    // ExtraInfo contains additional service information
+    string extra_info = 4;
+
+    // Method is the detection method (probed, table)
+    string method = 5;
+
+    // Confidence is the detection confidence level (0-10)
+    int32 confidence = 6;
+
+    // CPE contains Common Platform Enumeration identifiers
+    repeated string cpe = 7;
+
+    // Hostname is the hostname from service banner (if available)
+    string hostname = 8;
+
+    // OSType is the operating system type from service
+    string os_type = 9;
+
+    // DeviceType is the device type from service
+    string device_type = 10;
+
+    // ServiceFP is the service fingerprint
+    string service_fp = 11;
+}
+
+// OSMatch represents an OS detection match
+message OSMatch {
+    // Name is the OS name
+    string name = 1;
+
+    // Accuracy is the match accuracy (0-100)
+    int32 accuracy = 2;
+
+    // Line is the OS fingerprint line number
+    int32 line = 3;
+
+    // Classes contains OS classification information
+    repeated OSClass classes = 4;
+}
+
+// OSClass represents OS classification information
+message OSClass {
+    // Type is the device type (general purpose, router, firewall, etc.)
+    string type = 1;
+
+    // Vendor is the OS vendor
+    string vendor = 2;
+
+    // OSFamily is the OS family (Linux, Windows, etc.)
+    string os_family = 3;
+
+    // OSGen is the OS generation (e.g., "7" for Windows 7)
+    string os_gen = 4;
+
+    // Accuracy is the classification accuracy (0-100)
+    int32 accuracy = 5;
+
+    // CPE contains Common Platform Enumeration identifiers
+    repeated string cpe = 6;
+}
+
+// NmapScript represents NSE script execution result
+message NmapScript {
+    // ID is the script identifier
+    string id = 1;
+
+    // Output is the script output
+    string output = 2;
+
+    // Elements contains structured output elements
+    map<string, string> elements = 3;
+}

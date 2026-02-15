@@ -1,11 +1,11 @@
-package main
+package nmap
 
 import (
 	"context"
 	"errors"
 	"testing"
 
-	"github.com/zero-day-ai/sdk/api/gen/toolspb"
+	"github.com/zero-day-ai/tools/discovery/nmap/gen"
 	"github.com/zero-day-ai/sdk/toolerr"
 )
 
@@ -290,13 +290,13 @@ func TestValidation(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		request     *toolspb.NmapRequest
+		request     *gen.NmapRequest
 		expectError bool
 		errorMsg    string
 	}{
 		{
 			name: "valid request",
-			request: &toolspb.NmapRequest{
+			request: &gen.NmapRequest{
 				Targets: []string{"192.168.1.1"},
 				Args:    []string{"-sn"},
 			},
@@ -304,7 +304,7 @@ func TestValidation(t *testing.T) {
 		},
 		{
 			name: "empty targets",
-			request: &toolspb.NmapRequest{
+			request: &gen.NmapRequest{
 				Targets: []string{},
 				Args:    []string{"-sn"},
 			},
@@ -313,7 +313,7 @@ func TestValidation(t *testing.T) {
 		},
 		{
 			name: "nil targets",
-			request: &toolspb.NmapRequest{
+			request: &gen.NmapRequest{
 				Targets: nil,
 				Args:    []string{"-sn"},
 			},
@@ -322,7 +322,7 @@ func TestValidation(t *testing.T) {
 		},
 		{
 			name: "empty args",
-			request: &toolspb.NmapRequest{
+			request: &gen.NmapRequest{
 				Targets: []string{"192.168.1.1"},
 				Args:    []string{},
 			},
@@ -331,7 +331,7 @@ func TestValidation(t *testing.T) {
 		},
 		{
 			name: "nil args",
-			request: &toolspb.NmapRequest{
+			request: &gen.NmapRequest{
 				Targets: []string{"192.168.1.1"},
 				Args:    nil,
 			},
@@ -340,7 +340,7 @@ func TestValidation(t *testing.T) {
 		},
 		{
 			name: "multiple targets",
-			request: &toolspb.NmapRequest{
+			request: &gen.NmapRequest{
 				Targets: []string{"192.168.1.1", "192.168.1.2", "192.168.1.0/24"},
 				Args:    []string{"-sn"},
 			},
@@ -348,7 +348,7 @@ func TestValidation(t *testing.T) {
 		},
 		{
 			name: "multiple args",
-			request: &toolspb.NmapRequest{
+			request: &gen.NmapRequest{
 				Targets: []string{"192.168.1.0/24"},
 				Args:    []string{"-sV", "-sC", "-O", "-T4", "-p", "1-1000"},
 			},

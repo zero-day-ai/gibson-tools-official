@@ -52,12 +52,7 @@
 //	  Pop Item    Unmarshal      nmap binary      Marshal JSON
 //	              Proto Input                       Proto Output
 //
-// Note: This worker imports the tool implementation from the parent directory.
-// Since the parent directory is package main, we need to build the worker with:
-//
-//	go build -o nmap-worker ./cmd/worker ./tool.go ./capabilities.go ./streaming.go
-//
-// Or use a proper package structure by refactoring nmap to use package nmap.
+// Note: This worker imports the nmap tool implementation from the parent package.
 package main
 
 import (
@@ -67,6 +62,7 @@ import (
 	"os"
 
 	"github.com/zero-day-ai/sdk/tool/worker"
+	"github.com/zero-day-ai/tools/discovery/nmap"
 )
 
 func main() {
@@ -95,9 +91,7 @@ func main() {
 	}))
 
 	// Create tool instance
-	// NewTool() is defined in ../../tool.go (package main)
-	// This will be available when we build with both files
-	tool := NewTool()
+	tool := nmap.NewTool()
 
 	// Configure worker options
 	// Zero values for Concurrency/ShutdownTimeout mean "use component.yaml defaults"

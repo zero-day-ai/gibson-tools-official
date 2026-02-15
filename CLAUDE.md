@@ -1,8 +1,8 @@
-# Gibson Tools Development Guide
+# Gibson Tool Development Guide
 
 ## Overview
 
-Gibson tools are atomic, stateless wrappers around security utilities that provide structured, LLM-consumable I/O. Tools use **Protocol Buffers** for type-safe input/output, enabling reliable integration with the Gibson framework.
+Gibson tools are security-focused utilities that execute specific operations (scanning, enumeration, exploitation, etc.) and return structured results. Tools use Protocol Buffers for type-safe input/output and contribute to graph-based knowledge representation through the DiscoveryResult system.
 
 ## Tool Interface
 
@@ -14,529 +14,522 @@ type Tool interface {
     Name() string
     Version() string
     Description() string
-    Tags() []string
+    Category() string
 
-    // Proto-based execution (REQUIRED)
-    InputMessageType() string   // e.g., "gibson.tools.NmapRequest"
-    OutputMessageType() string  // e.g., "gibson.tools.NmapResponse"
-    ExecuteProto(ctx context.Context, input proto.Message) (proto.Message, error)
+    // Execution
+    Execute(ctx context.Context, input proto.Message) (proto.Message, error)
 
-    // Health monitoring
+    // Proto definitions
+    InputMessageType() string
+    OutputMessageType() string
+
+    // Lifecycle
+    Initialize(ctx context.Context, cfg ToolConfig) error
+    Shutdown(ctx context.Context) error
     Health(ctx context.Context) types.HealthStatus
 }
 ```
 
-## Directory Structure
+## Proto Architecture
 
-```
-tools/
-├── discovery/           # Host/network discovery
-│   └── nmap/           # Network mapper
-├── reconnaissance/     # Information gathering
-│   ├── httpx/          # HTTP probing
-│   └── nuclei/         # Vulnerability scanning
-├── fingerprinting/     # Technology detection
-│   ├── wappalyzer/     # Web tech detection
-│   ├── whatweb/        # Web fingerprinting
-│   ├── sslyze/         # SSL/TLS analysis
-│   └── testssl/        # SSL testing
-└── bin/                # Compiled binaries
-```
+Each tool owns its proto definitions in a `proto/` subdirectory. This is the **self-contained proto architecture**.
 
-## Tool Categories (MITRE ATT&CK)
+### Creating New Tool Protos
 
-| Category | Tools | Purpose |
-|----------|-------|---------|
-| **Discovery** | nmap, masscan | Network/host discovery |
-| **Reconnaissance** | httpx, nuclei, subfinder | Information gathering |
-| **Fingerprinting** | wappalyzer, whatweb, sslyze, testssl | Technology detection |
-| **Initial Access** | sqlmap, gobuster, hydra | Exploitation |
-| **Credential Access** | responder, secretsdump | Credential harvesting |
-| **Post-Exploitation** | linpeas, winpeas, hashcat | Privilege escalation |
+1. Create `proto/{tool}.proto` with package `gibson.tools.{tool}`
+2. Import `graphrag.proto` for DiscoveryResult (field 100)
+3. Run `make proto` to generate to `gen/`
+4. Import local `gen/` package in tool.go
 
-## Building a Tool
+### Critical: Field 100
 
-### 1. Define Proto Messages
-
-Create `proto/tool.proto`:
+All tool responses MUST use SDK's DiscoveryResult for field 100:
 
 ```protobuf
 syntax = "proto3";
 
-package gibson.tools;
+package gibson.tools.nmap;
 
-option go_package = "github.com/zero-day-ai/tools/mytool/proto";
+import "graphrag.proto";
 
-message MyToolRequest {
-    string target = 1;
-    repeated string options = 2;
-    int32 timeout_seconds = 3;
+option go_package = "github.com/zero-day-ai/tools/network/nmap/gen";
+
+message NmapRequest {
+  string target = 1;
+  string ports = 2;
+  repeated string flags = 3;
 }
 
-message MyToolResponse {
-    bool success = 1;
-    string output = 2;
-    repeated Finding findings = 3;
-    ErrorInfo error = 4;
+message NmapResponse {
+  // Tool-specific fields 1-99
+  repeated Host hosts = 1;
+  string raw_output = 2;
+  int32 exit_code = 3;
+
+  // REQUIRED: Field 100 for graph population
+  gibson.graphrag.DiscoveryResult discovery = 100;
 }
 
-message Finding {
-    string title = 1;
-    string description = 2;
-    string severity = 3;
+message Host {
+  string address = 1;
+  repeated Port ports = 2;
+  string hostname = 3;
 }
 
-message ErrorInfo {
-    string code = 1;
-    string message = 2;
+message Port {
+  int32 number = 1;
+  string protocol = 2;
+  string state = 3;
+  string service = 4;
 }
 ```
 
-### 2. Implement Tool Interface
+**Why Field 100?**
+- Provides consistent graph knowledge representation
+- Enables automatic entity/relationship extraction
+- Supports mission-wide knowledge correlation
+- Required by the SDK's graph processing pipeline
+
+### Package Naming
+
+| Type | Package Pattern | Example |
+|------|-----------------|---------|
+| Tool protos | `gibson.tools.{tool_name}` | `gibson.tools.nmap` |
+| Category shared | `gibson.tools.{category}` | `gibson.tools.kubernetes` |
+| SDK framework | `gibson.graphrag`, `gibson.common` | Core SDK types |
+
+**Important**: Use the FULL package name, not just `gibson.tools`.
+
+### InputMessageType() Convention
+
+The `InputMessageType()` method must return the FULL proto message name including package:
 
 ```go
-package mytool
-
-import (
-    "context"
-    "os/exec"
-
-    pb "github.com/zero-day-ai/tools/mytool/proto"
-    "github.com/zero-day-ai/sdk/tool"
-    "github.com/zero-day-ai/sdk/types"
-    "google.golang.org/protobuf/proto"
-)
-
-type MyTool struct {
-    binaryPath string
+// CORRECT:
+func (t *NmapTool) InputMessageType() string {
+    return "gibson.tools.nmap.NmapRequest"  // Includes package name
 }
 
-func New() *MyTool {
-    return &MyTool{binaryPath: "/usr/bin/mytool"}
+func (t *NmapTool) OutputMessageType() string {
+    return "gibson.tools.nmap.NmapResponse"
 }
 
-func (t *MyTool) Name() string        { return "mytool" }
-func (t *MyTool) Version() string     { return "1.0.0" }
-func (t *MyTool) Description() string { return "My security tool wrapper" }
-func (t *MyTool) Tags() []string      { return []string{"reconnaissance", "scanning"} }
-
-func (t *MyTool) InputMessageType() string  { return "gibson.tools.MyToolRequest" }
-func (t *MyTool) OutputMessageType() string { return "gibson.tools.MyToolResponse" }
-
-func (t *MyTool) ExecuteProto(ctx context.Context, input proto.Message) (proto.Message, error) {
-    req, ok := input.(*pb.MyToolRequest)
-    if !ok {
-        return nil, fmt.Errorf("invalid input type")
-    }
-
-    // Build command
-    args := []string{"-t", req.Target}
-    args = append(args, req.Options...)
-
-    // Execute with context (timeout support)
-    cmd := exec.CommandContext(ctx, t.binaryPath, args...)
-    output, err := cmd.Output()
-    if err != nil {
-        return &pb.MyToolResponse{
-            Success: false,
-            Error: &pb.ErrorInfo{
-                Code:    "EXEC_ERROR",
-                Message: err.Error(),
-            },
-        }, nil
-    }
-
-    // Parse output into structured response
-    findings := parseOutput(output)
-
-    return &pb.MyToolResponse{
-        Success:  true,
-        Output:   string(output),
-        Findings: findings,
-    }, nil
-}
-
-func (t *MyTool) Health(ctx context.Context) types.HealthStatus {
-    // Check if binary exists and is executable
-    if _, err := exec.LookPath(t.binaryPath); err != nil {
-        return types.HealthStatus{
-            Status:  types.HealthStatusUnhealthy,
-            Message: fmt.Sprintf("binary not found: %s", t.binaryPath),
-        }
-    }
-    return types.HealthStatus{Status: types.HealthStatusHealthy}
+// WRONG:
+func (t *NmapTool) InputMessageType() string {
+    return "NmapRequest"  // Missing package - won't resolve in GlobalTypes
 }
 ```
 
-### 3. Create Main Entry Point
+**Why?** The Gibson runtime uses these names to:
+1. Resolve types in the global proto registry
+2. Enable dynamic proto message creation
+3. Support agent-to-tool proto marshaling
+4. Validate input/output type compatibility
+
+### Import Patterns
+
+```go
+// Import local generated protos
+import "github.com/zero-day-ai/tools/{category}/{tool}/gen"
+
+// Import SDK types (for DiscoveryResult)
+import "github.com/zero-day-ai/sdk/api/gen/graphragpb"
+
+// Import category shared types (if needed)
+import "github.com/zero-day-ai/tools/{category}/common/gen"
+```
+
+**Example tool.go imports:**
 
 ```go
 package main
 
 import (
-    "github.com/zero-day-ai/tools/mytool"
+    "context"
+
+    // Local proto types
+    pb "github.com/zero-day-ai/tools/network/nmap/gen"
+
+    // SDK types for DiscoveryResult
+    "github.com/zero-day-ai/sdk/api/gen/graphragpb"
+
+    // SDK tool framework
+    "github.com/zero-day-ai/sdk/tool"
     "github.com/zero-day-ai/sdk/serve"
+
+    "google.golang.org/protobuf/proto"
+)
+```
+
+### Proto Generation
+
+From tool directory:
+```bash
+make proto        # Generate proto code
+make proto-clean  # Clean and regenerate
+```
+
+From tools root:
+```bash
+make proto        # Generate for ALL tools
+```
+
+**Build order:**
+1. SDK protos (graphrag.proto) must be built first
+2. Category common protos (if any)
+3. Tool-specific protos
+
+The Makefile handles this automatically via dependencies.
+
+### Common Mistakes to Avoid
+
+| Mistake | Impact | Fix |
+|---------|--------|-----|
+| Wrong package name (`gibson.tools` instead of `gibson.tools.nmap`) | Type resolution fails | Use full package: `gibson.tools.{tool}` |
+| Missing field 100 | Graph population breaks | Add `gibson.graphrag.DiscoveryResult discovery = 100;` |
+| Wrong import path | Circular dependencies | Import from local `gen/`, not SDK `toolspb/` |
+| Short type name in InputMessageType() | Runtime type lookup fails | Use full name: `gibson.tools.{tool}.{Message}` |
+| Importing SDK tool protos | Circular dependency | Tools should NEVER import SDK's toolspb package |
+
+## Complete Tool Example
+
+```go
+package main
+
+import (
+    "context"
+    "os/exec"
+
+    pb "github.com/zero-day-ai/tools/network/nmap/gen"
+    "github.com/zero-day-ai/sdk/api/gen/graphragpb"
+    "github.com/zero-day-ai/sdk/tool"
+    "github.com/zero-day-ai/sdk/serve"
+    "google.golang.org/protobuf/proto"
 )
 
+type NmapTool struct {
+    config NmapConfig
+}
+
+func (t *NmapTool) Name() string        { return "nmap" }
+func (t *NmapTool) Version() string     { return "1.0.0" }
+func (t *NmapTool) Description() string { return "Network port scanner" }
+func (t *NmapTool) Category() string    { return "network" }
+
+func (t *NmapTool) InputMessageType() string {
+    return "gibson.tools.nmap.NmapRequest"
+}
+
+func (t *NmapTool) OutputMessageType() string {
+    return "gibson.tools.nmap.NmapResponse"
+}
+
+func (t *NmapTool) Execute(ctx context.Context, input proto.Message) (proto.Message, error) {
+    req := input.(*pb.NmapRequest)
+
+    // Build nmap command
+    args := append([]string{req.Target}, req.Flags...)
+    if req.Ports != "" {
+        args = append(args, "-p", req.Ports)
+    }
+
+    // Execute nmap
+    cmd := exec.CommandContext(ctx, "nmap", args...)
+    output, err := cmd.CombinedOutput()
+    if err != nil {
+        return nil, err
+    }
+
+    // Parse output (simplified)
+    hosts := parseNmapOutput(output)
+
+    // Build DiscoveryResult for graph population
+    discovery := &graphragpb.DiscoveryResult{
+        Entities: []*graphragpb.Entity{},
+        Relationships: []*graphragpb.Relationship{},
+    }
+
+    for _, host := range hosts {
+        // Create host entity
+        hostEntity := &graphragpb.Entity{
+            Type: "host",
+            Name: host.Address,
+            Properties: map[string]string{
+                "address":  host.Address,
+                "hostname": host.Hostname,
+            },
+        }
+        discovery.Entities = append(discovery.Entities, hostEntity)
+
+        // Create port entities and relationships
+        for _, port := range host.Ports {
+            portEntity := &graphragpb.Entity{
+                Type: "port",
+                Name: fmt.Sprintf("%s:%d", host.Address, port.Number),
+                Properties: map[string]string{
+                    "number":   fmt.Sprintf("%d", port.Number),
+                    "protocol": port.Protocol,
+                    "state":    port.State,
+                    "service":  port.Service,
+                },
+            }
+            discovery.Entities = append(discovery.Entities, portEntity)
+
+            // Host -> Port relationship
+            rel := &graphragpb.Relationship{
+                Source: host.Address,
+                Target: portEntity.Name,
+                Type:   "has_port",
+            }
+            discovery.Relationships = append(discovery.Relationships, rel)
+        }
+    }
+
+    // Return response with discovery results
+    return &pb.NmapResponse{
+        Hosts:      hosts,
+        RawOutput:  string(output),
+        ExitCode:   0,
+        Discovery:  discovery,  // Field 100
+    }, nil
+}
+
+func (t *NmapTool) Initialize(ctx context.Context, cfg tool.ToolConfig) error {
+    // Verify nmap is installed
+    if _, err := exec.LookPath("nmap"); err != nil {
+        return fmt.Errorf("nmap not found in PATH: %w", err)
+    }
+    return nil
+}
+
+func (t *NmapTool) Shutdown(ctx context.Context) error {
+    return nil
+}
+
+func (t *NmapTool) Health(ctx context.Context) types.HealthStatus {
+    // Check if nmap is accessible
+    if _, err := exec.LookPath("nmap"); err != nil {
+        return types.HealthStatus{
+            Status:  types.HealthStatusUnhealthy,
+            Message: "nmap binary not found",
+        }
+    }
+    return types.HealthStatus{Status: types.HealthStatusHealthy}
+}
+
 func main() {
-    tool := mytool.New()
-    serve.Tool(tool, serve.WithPort(50052))
+    tool := &NmapTool{}
+    serve.Tool(tool, serve.WithPort(50051))
 }
 ```
 
-### 4. Define component.yaml
+## Tool Configuration
+
+### component.yaml
 
 ```yaml
-name: mytool
+name: nmap
 version: 1.0.0
 type: tool
-description: My security tool wrapper
+category: network
+description: Network port scanner using nmap
 
-tags:
-  - reconnaissance
-  - scanning
-
-mitre_attack:
-  tactics:
-    - TA0043  # Reconnaissance
-  techniques:
-    - T1595   # Active Scanning
+input_type: gibson.tools.nmap.NmapRequest
+output_type: gibson.tools.nmap.NmapResponse
 
 dependencies:
   binaries:
-    - name: mytool
-      version: ">=2.0.0"
-      install: "apt-get install mytool"
+    - name: nmap
+      version: ">=7.80"
+      optional: false
 
-proto:
-  input: gibson.tools.MyToolRequest
-  output: gibson.tools.MyToolResponse
+config_options:
+  - name: timeout
+    type: duration
+    description: Default scan timeout
+    default: 5m
+  - name: max_retries
+    type: int
+    description: Maximum scan retries on failure
+    default: 3
 ```
-
-## Tool Output Standards
-
-### Structured JSON
-
-All tools must produce structured output that LLMs can parse:
-
-```json
-{
-  "success": true,
-  "target": "192.168.1.1",
-  "findings": [
-    {
-      "port": 22,
-      "service": "ssh",
-      "version": "OpenSSH 8.2",
-      "vulnerability": null
-    },
-    {
-      "port": 80,
-      "service": "http",
-      "version": "nginx 1.18.0",
-      "vulnerability": "CVE-2021-23017"
-    }
-  ],
-  "metadata": {
-    "scan_time": "12.5s",
-    "host_up": true
-  }
-}
-```
-
-### MITRE ATT&CK Mappings
-
-Include technique mappings in tool metadata:
-
-```go
-func (t *MyTool) MITREMappings() []MITREMapping {
-    return []MITREMapping{
-        {Tactic: "TA0043", Technique: "T1595", SubTechnique: "T1595.001"},
-    }
-}
-```
-
-## Health Monitoring
-
-Tools must implement health checks that verify:
-
-1. **Binary availability** - Required executables exist
-2. **Version compatibility** - Binary version meets requirements
-3. **Dependencies** - Required libraries/services available
-
-```go
-func (t *MyTool) Health(ctx context.Context) types.HealthStatus {
-    // Check binary exists
-    path, err := exec.LookPath("mytool")
-    if err != nil {
-        return types.HealthStatus{
-            Status:  types.HealthStatusUnhealthy,
-            Message: "mytool binary not found",
-        }
-    }
-
-    // Check version
-    cmd := exec.CommandContext(ctx, path, "--version")
-    output, err := cmd.Output()
-    if err != nil {
-        return types.HealthStatus{
-            Status:  types.HealthStatusDegraded,
-            Message: "unable to check version",
-        }
-    }
-
-    version := parseVersion(string(output))
-    if !isCompatible(version, "2.0.0") {
-        return types.HealthStatus{
-            Status:  types.HealthStatusDegraded,
-            Message: fmt.Sprintf("version %s < required 2.0.0", version),
-        }
-    }
-
-    return types.HealthStatus{Status: types.HealthStatusHealthy}
-}
-```
-
-## Capability Reporting
-
-Tools can optionally implement `CapabilityProvider` to report runtime privileges and feature availability. This allows the framework to intelligently adapt tool invocations based on the environment.
-
-### Interface
-
-```go
-type CapabilityProvider interface {
-    Capabilities(ctx context.Context) *types.Capabilities
-}
-```
-
-### Capabilities Struct
-
-```go
-type Capabilities struct {
-    // Privilege levels
-    HasRoot      bool  // Running as root/administrator
-    HasSudo      bool  // Sudo available without password
-    CanRawSocket bool  // Can create raw sockets (ICMP, SYN scans)
-
-    // Tool-specific features
-    Features map[string]bool  // e.g., {"stealth_scan": true, "os_detection": false}
-
-    // Argument restrictions
-    BlockedArgs      []string            // Args that will fail (e.g., ["-sS", "-O"])
-    ArgAlternatives  map[string]string   // Suggested replacements (e.g., {"-sS": "-sT"})
-}
-```
-
-### Probing Helpers
-
-The SDK provides helpers for common capability checks:
-
-```go
-import "github.com/zero-day-ai/sdk/tool"
-
-// Check if running as root
-hasRoot := tool.ProbeRoot()
-
-// Check if sudo available without password
-hasSudo := tool.ProbeSudo()
-
-// Check if raw socket creation is possible
-canRaw := tool.ProbeRawSocket()
-```
-
-### Example Implementation
-
-```go
-func (t *NmapTool) Capabilities(ctx context.Context) *types.Capabilities {
-    // Probe once at startup
-    hasRoot := tool.ProbeRoot()
-    hasSudo := tool.ProbeSudo()
-    canRaw := tool.ProbeRawSocket()
-
-    caps := &types.Capabilities{
-        HasRoot:      hasRoot,
-        HasSudo:      hasSudo,
-        CanRawSocket: canRaw,
-        Features:     make(map[string]bool),
-    }
-
-    // Feature detection based on privileges
-    caps.Features["syn_scan"] = canRaw
-    caps.Features["os_detection"] = canRaw
-    caps.Features["version_detection"] = true  // Always available
-
-    // Build blocked args and alternatives
-    if !canRaw {
-        caps.BlockedArgs = []string{"-sS", "-sU", "-O", "-A"}
-        caps.ArgAlternatives = map[string]string{
-            "-sS": "-sT",  // SYN scan → TCP connect scan
-            "-sU": "",     // UDP scan not available
-            "-O":  "",     // OS detection not available
-            "-A":  "-sV",  // Aggressive scan → version detection only
-        }
-    }
-
-    return caps
-}
-```
-
-### Best Practices
-
-1. **Probe once, cache result** - Capability detection can be expensive. Probe during initialization and cache the result.
-
-2. **Default to restrictive** - If probing fails or returns uncertain results, assume no privileges. Better to fail safe.
-
-3. **Provide alternatives** - When blocking privileged arguments, always suggest unprivileged alternatives when possible:
-   ```go
-   caps.ArgAlternatives = map[string]string{
-       "-sS": "-sT",  // Good: provides alternative
-       "-O":  "",     // Acceptable: no alternative exists
-   }
-   ```
-
-4. **Document requirements** - Use features map to communicate what operations are available:
-   ```go
-   caps.Features["stealth_scan"] = false
-   caps.Features["service_detection"] = true
-   ```
-
-5. **Test degraded mode** - Always test tool behavior when running without privileges to ensure graceful degradation.
 
 ## Existing Tools
 
-### nmap (discovery/)
+### Network Category
 
-Network mapper for host discovery and port scanning.
+**nmap** - Network port scanner
+- Location: `opensource/tools/network/nmap/`
+- Input: NmapRequest (target, ports, flags)
+- Output: NmapResponse (hosts, ports, services)
 
-```go
-// Request
-&pb.NmapRequest{
-    Target: "192.168.1.0/24",
-    Ports:  "1-65535",
-    Flags:  []string{"-sV", "-sC", "-T4"},
-}
+**subfinder** - Subdomain enumeration
+- Location: `opensource/tools/network/subfinder/`
+- Input: SubfinderRequest (domain, sources)
+- Output: SubfinderResponse (subdomains)
 
-// Response
-&pb.NmapResponse{
-    Hosts: []*pb.Host{
-        {Address: "192.168.1.1", Ports: []*pb.Port{...}},
-    },
-}
-```
+### Web Category
 
-### httpx (reconnaissance/)
+**httpx** - HTTP probe and analysis
+- Location: `opensource/tools/web/httpx/`
+- Input: HttpxRequest (urls, options)
+- Output: HttpxResponse (results, technologies)
 
-HTTP probe for web server analysis.
+**nuclei** - Vulnerability scanner
+- Location: `opensource/tools/web/nuclei/`
+- Input: NucleiRequest (targets, templates)
+- Output: NucleiResponse (findings, matches)
 
-```go
-// Request
-&pb.HttpxRequest{
-    Targets: []string{"https://example.com"},
-    Options: &pb.HttpxOptions{
-        StatusCode: true,
-        Title:      true,
-        TechDetect: true,
-    },
-}
-```
+### Kubernetes Category
 
-### nuclei (reconnaissance/)
+**kubectl** - Kubernetes cluster operations
+- Location: `opensource/tools/kubernetes/kubectl/`
+- Uses: `kubernetes/common/gen` for shared types
 
-Template-based vulnerability scanner.
+## Development Workflow
 
-```go
-// Request
-&pb.NucleiRequest{
-    Target:    "https://example.com",
-    Templates: []string{"cves/", "vulnerabilities/"},
-    Severity:  []string{"critical", "high"},
-}
-```
-
-### wappalyzer (fingerprinting/)
-
-Web technology fingerprinting.
-
-```go
-// Request
-&pb.WappalyzerRequest{
-    Url: "https://example.com",
-}
-
-// Response
-&pb.WappalyzerResponse{
-    Technologies: []*pb.Technology{
-        {Name: "nginx", Category: "Web servers", Version: "1.18.0"},
-        {Name: "React", Category: "JavaScript frameworks"},
-    },
-}
-```
-
-### sslyze / testssl (fingerprinting/)
-
-SSL/TLS security analysis.
-
-```go
-// Request
-&pb.SSLyzeRequest{
-    Target: "example.com:443",
-    Checks: []string{"certinfo", "protocols", "ciphers"},
-}
-```
-
-## Build System
-
-### Building Individual Tools
+### Create New Tool
 
 ```bash
-cd tools/discovery/nmap
+# 1. Create tool directory
+mkdir -p opensource/tools/{category}/{tool}/proto
+
+# 2. Create proto definition
+cat > opensource/tools/{category}/{tool}/proto/{tool}.proto <<EOF
+syntax = "proto3";
+package gibson.tools.{tool};
+import "graphrag.proto";
+option go_package = "github.com/zero-day-ai/tools/{category}/{tool}/gen";
+
+message {Tool}Request {
+  string target = 1;
+}
+
+message {Tool}Response {
+  string result = 1;
+  gibson.graphrag.DiscoveryResult discovery = 100;
+}
+EOF
+
+# 3. Create Makefile
+cat > opensource/tools/{category}/{tool}/Makefile <<EOF
+include ../../../proto.mk
+EOF
+
+# 4. Generate protos
+cd opensource/tools/{category}/{tool}
+make proto
+
+# 5. Implement tool.go
+# See complete example above
+```
+
+### Build and Test
+
+```bash
+# Generate protos
+make proto
+
+# Build tool
 make build
+
+# Run tests
+make test
+make test-coverage
+
+# Run locally
+./{tool}
 ```
 
-### Building All Tools
+### Debug
 
 ```bash
-cd tools/
-make build-all
-```
+# Enable debug logging
+export GIBSON_LOG_LEVEL=debug
 
-### Install to Gibson
-
-```bash
-gibson tool install ./bin/nmap
-gibson tool install github.com/zero-day-ai/tools/discovery/nmap
-```
-
-## Testing
-
-### Unit Tests
-
-```go
-func TestMyTool_Execute(t *testing.T) {
-    tool := New()
-    req := &pb.MyToolRequest{Target: "localhost"}
-
-    resp, err := tool.ExecuteProto(context.Background(), req)
-    require.NoError(t, err)
-
-    result := resp.(*pb.MyToolResponse)
-    assert.True(t, result.Success)
-}
-```
-
-### Integration Tests
-
-```bash
-make test-integration
+# Test with grpcurl
+grpcurl -plaintext -d '{...}' localhost:50051 gibson.tools.{tool}.{Tool}Service/{Method}
 ```
 
 ## Best Practices
 
-1. **Always use Proto** - Never use raw JSON maps for tool I/O
-2. **Structured output** - Parse tool output into meaningful structures
-3. **Health checks** - Verify dependencies before execution
-4. **Context respect** - Honor context cancellation and timeouts
-5. **Error handling** - Return structured errors, not panics
-6. **MITRE mappings** - Tag tools with ATT&CK techniques
-7. **Idempotent** - Tools should be safe to retry
-8. **Minimal permissions** - Request only necessary capabilities
+### Proto Design
+
+1. **Use field 100 for DiscoveryResult** - Always include graph data
+2. **Full package names** - `gibson.tools.{tool}`, not `gibson.tools`
+3. **Semantic versioning** - Version protos carefully to avoid breaking changes
+4. **Descriptive field names** - Use clear, consistent naming conventions
+5. **Avoid nested complexity** - Flatten structures where possible
+
+### Tool Implementation
+
+1. **Validate input** - Check required fields before execution
+2. **Handle timeouts** - Respect context cancellation
+3. **Return structured errors** - Use proto error types when applicable
+4. **Populate discovery results** - Extract entities and relationships
+5. **Log appropriately** - Use structured logging with context
+6. **Check dependencies** - Verify external binaries in Initialize()
+7. **Graceful shutdown** - Clean up resources in Shutdown()
+
+### Graph Population
+
+1. **Entity types** - Use consistent entity type naming (host, port, domain, service)
+2. **Entity names** - Use unique, deterministic identifiers
+3. **Relationships** - Model real-world connections (has_port, runs_service, depends_on)
+4. **Properties** - Add relevant metadata for filtering and analysis
+5. **Confidence scores** - Include confidence when applicable
+
+### Testing
+
+1. **Unit tests** - Test proto parsing and tool logic separately
+2. **Integration tests** - Test full execution with real/mock binaries
+3. **Proto validation** - Verify field 100 is populated correctly
+4. **Error cases** - Test timeout, invalid input, missing dependencies
+5. **Mock external tools** - Use test fixtures for reproducible tests
+
+## Migration Guide
+
+### From Old toolspb to Self-Contained Protos
+
+1. **Create local proto/**: Move tool proto from SDK to tool directory
+2. **Update package**: Change from `gibson.tools` to `gibson.tools.{tool}`
+3. **Add field 100**: Include DiscoveryResult in response message
+4. **Update imports**: Change from SDK toolspb to local gen package
+5. **Fix InputMessageType()**: Use full package name
+6. **Run make proto**: Generate new proto code
+7. **Update tests**: Update import paths and type assertions
+
+**Example migration:**
+
+```diff
+// Before (old SDK toolspb)
+-import "github.com/zero-day-ai/sdk/api/gen/toolspb"
++import pb "github.com/zero-day-ai/tools/network/nmap/gen"
++import "github.com/zero-day-ai/sdk/api/gen/graphragpb"
+
+ func (t *NmapTool) InputMessageType() string {
+-    return "NmapRequest"
++    return "gibson.tools.nmap.NmapRequest"
+ }
+
+ func (t *NmapTool) Execute(ctx context.Context, input proto.Message) (proto.Message, error) {
+-    req := input.(*toolspb.NmapRequest)
++    req := input.(*pb.NmapRequest)
+
+     // ... execution logic ...
+
+-    return &toolspb.NmapResponse{
++    return &pb.NmapResponse{
+         Hosts: hosts,
++        Discovery: discovery,  // NEW: Field 100
+     }, nil
+ }
+```
+
+## Resources
+
+- **SDK Documentation**: `github.com/zero-day-ai/sdk/docs/`
+- **Proto Best Practices**: `github.com/zero-day-ai/sdk/docs/proto-guide.md`
+- **Example Tools**: `opensource/tools/network/nmap/`
+- **Protocol Buffers Guide**: https://protobuf.dev/
+- **gRPC Go Tutorial**: https://grpc.io/docs/languages/go/
