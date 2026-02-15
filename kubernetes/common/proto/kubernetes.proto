@@ -1,0 +1,59 @@
+syntax = "proto3";
+package gibson.tools.kubernetes;
+option go_package = "github.com/zero-day-ai/tools/kubernetes/common/gen";
+
+// KubeContext provides Kubernetes cluster connection details
+message KubeContext {
+  // Path to kubeconfig file
+  string kubeconfig_path = 1;
+  // Context name within kubeconfig
+  string context_name = 2;
+  // Target namespace (empty for cluster-wide)
+  string namespace = 3;
+  // API server URL (optional, derived from kubeconfig)
+  string api_server = 4;
+  // Bearer token for authentication (optional)
+  string token = 5;
+  // Skip TLS verification (not recommended for production)
+  bool insecure_skip_tls_verify = 6;
+}
+
+// K8sResourceRef identifies a Kubernetes resource
+message K8sResourceRef {
+  // Resource kind (e.g., Pod, Service, Deployment)
+  string kind = 1;
+  // Resource name
+  string name = 2;
+  // Resource namespace (empty for cluster-scoped)
+  string namespace = 3;
+  // Resource UID (optional)
+  string uid = 4;
+  // API version (e.g., v1, apps/v1)
+  string api_version = 5;
+}
+
+// K8sFinding represents a Kubernetes-specific security finding
+message K8sFinding {
+  // Finding title
+  string title = 1;
+  // Detailed description
+  string description = 2;
+  // Severity: critical, high, medium, low, info
+  string severity = 3;
+  // Confidence score (0.0 to 1.0)
+  float confidence = 4;
+  // MITRE ATT&CK technique ID (e.g., T1611)
+  string mitre_technique = 5;
+  // Remediation guidance
+  string remediation = 6;
+  // Affected resource
+  K8sResourceRef affected_resource = 7;
+  // Additional context
+  map<string, string> metadata = 8;
+}
+
+// K8sNamespaceRef is a lightweight namespace reference
+message K8sNamespaceRef {
+  string name = 1;
+  map<string, string> labels = 2;
+}
